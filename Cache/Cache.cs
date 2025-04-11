@@ -59,7 +59,7 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
                 listOfSources.Add(new CacheItem
                 {
-                    Name = source.Name,
+                    Name = _buildKey(source.Name, source.County),
                     Distance = distance,
                 });
             }
