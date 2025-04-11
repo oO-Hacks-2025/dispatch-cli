@@ -1,11 +1,20 @@
+using System.Text.Json.Serialization;
+
 namespace testing.Models;
 
-public class City(string name, string country, double latitude, double longitude)
+public class City
 {
-    public string Name { get; } = name;
-    public string Country { get; } = country;
-    public double Latitude { get; } = latitude;
-    public double Longitude { get; } = longitude;
+    [JsonPropertyName("name")]
+    public string Name { get; set; }
 
-    public override string ToString() => $"{Name}, {Country}";
+    [JsonPropertyName("county")]
+    public string County { get; set; }
+
+    [JsonPropertyName("lat")]
+    public double Lat { get; set; }
+
+    [JsonPropertyName("long")]
+    public double Long { get; set; }
+
+    public override string ToString() => $"{Name}, {County}";
 }
