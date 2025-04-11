@@ -19,6 +19,6 @@ logger.LogInformation("Starting the HTTP client setup...");
 using HttpClient client = new();
 client.DefaultRequestHeaders.Accept.Clear();
 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-client.DefaultRequestHeaders.Add("User-Agent", "Custom agent");
+client.DefaultRequestHeaders.Add("User-Agent", "[object Object] agent");
 
 logger.LogInformation("HTTP client configured.");
