@@ -55,6 +55,11 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
             foreach (var source in locations)
             {
+                if (source.Name == target.Name && source.County == target.County)
+                {
+                    continue;
+                }
+
                 var distance = ComputeDistance(target, source);
 
                 listOfSources.Add(new CacheItem
