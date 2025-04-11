@@ -5,10 +5,10 @@ namespace testing.Models;
 public class City
 {
     [JsonPropertyName("name")]
-    public string Name { get; set; }
+    public required string Name { get; set; }
 
     [JsonPropertyName("county")]
-    public string County { get; set; }
+    public required string County { get; set; }
 
     [JsonPropertyName("lat")]
     public double Lat { get; set; }
