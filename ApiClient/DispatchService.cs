@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Cache;
+using Microsoft.Extensions.Logging;
 using testing.Models;
 
 namespace testing.ApiClient
@@ -19,20 +20,20 @@ namespace testing.ApiClient
             _logger = logger;
         }
 
-        public async Task Dispatch(Call emergencyCall)
+        public async Task<bool> Dispatch(Call emergencyCall)
         {
             _logger.LogInformation($"Dispatching service for {emergencyCall.City} in {emergencyCall.County}...");
 
             if (emergencyCall is null || emergencyCall.Requests is null)
             {
-                return;
+                return false;
             }
 
             var locations = _locationsCache.GetCacheItem(string.Concat(emergencyCall.City, "::", emergencyCall.County));
 
             if (locations is null || locations.Count == 0)
             {
-                return;
+                return false;
             }
 
             _logger.LogError($"{JsonSerializer.Serialize(emergencyCall.Requests)}");
@@ -98,8 +99,11 @@ namespace testing.ApiClient
 
                     _logger.LogInformation($"[Emergency::{emergencyCall.City}::{emergencyCall.County}] Dispatched {request.Quantity} of {request.ServiceType} from {location.City} in {location.County} to {emergencyCall.City} in {emergencyCall.County}");
 
+                    return true;
                 }
             }
+
+            return false;
         }
     }
 }

@@ -3,6 +3,7 @@ using Polly;
 using Polly.Retry;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using testing.Models;
 
@@ -48,7 +49,7 @@ public class ApiClient
             .Or<JsonException>()
             .WaitAndRetryAsync(
                 5,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                retryAttempt => TimeSpan.FromMilliseconds(Math.Pow(5, retryAttempt)),
                 onRetry: (exception, timeSpan, retryCount, context) =>
                 {
                     _logger.LogWarning(
@@ -57,14 +58,14 @@ public class ApiClient
     }
 
     #region Control Operations
-    public async Task<GameStatus?> PostRunReset(string seed = "default", int targetDispatches = 10_000, int maxActiveCalls = 100)
+    public async Task<GameStatus?> PostRunReset(string seed, int targetDispatches, int maxActiveCalls)
     {
         return await _retryPolicy.ExecuteAsync(async () =>
         {
-            var response = await _httpClient.PostAsJsonAsync(
-                RequestPath.ControlReset,
-                new { seed, targetDispatches, maxActiveCalls },
-                _jsonOptions);
+            var response = await _httpClient.PostAsync(
+                $"{RequestPath.ControlReset}?seed={seed}&targetDispatches={targetDispatches}&maxActiveCalls={maxActiveCalls}",
+                null
+                );
 
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<GameStatus>(_jsonOptions);
