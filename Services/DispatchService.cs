@@ -1,27 +1,23 @@
-using System.Collections.Concurrent;
-using Cache;
-using testing.ApiClient;
-using testing.Models;
+using EmergencyDispatcher.Api;
+using EmergencyDispatcher.Cache;
+using EmergencyDispatcher.Domain.Models;
 
-namespace testing.Services;
+namespace EmergencyDispatcher.Services;
 
 public class DispatchService(
-    ApiClient.ApiClient client,
+    ApiClient client,
     LocationsCache locationsCache,
     BlacklistCache blacklistCache,
     ILogger<DispatchService> logger
 )
 {
-    private readonly ApiClient.ApiClient _client = client;
+    private readonly ApiClient _client = client;
     private readonly LocationsCache _locationsCache = locationsCache;
     private readonly BlacklistCache _blacklistCache = blacklistCache;
     private readonly ILogger<DispatchService> _logger = logger;
     private readonly SemaphoreSlim _apiSemaphore = new(10);
-    private readonly ConcurrentDictionary<string, int> _availabilityCache = new();
 
-    public async Task RunDispatcher(
-        CancellationToken cancellationToken = default
-    )
+    public async Task RunDispatcher(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Starting emergency dispatch service");
 
@@ -31,28 +27,13 @@ public class DispatchService(
         {
             try
             {
-                Call? call = null;
-                try
-                {
-                    call =
-                        await _client.GetCallNext()
-                        ?? throw new EmptyQueueException("No calls in queue");
-                }
-                catch (EmptyQueueException)
-                {
-                    var finalStatus = await _client.PostRunStop();
-                    LogFinalResults(finalStatus!);
-                    _logger.LogInformation("No more calls in queue. Stopping dispatcher.");
-                    cancellationToken.ThrowIfCancellationRequested();
-                    Environment.Exit(0);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error getting next call");
-                    continue;
-                }
-
+                Call? call = await GetNextCall(cancellationToken);
                 await ProcessCallAsync(call, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogInformation("Dispatcher operation canceled");
+                break;
             }
             catch (Exception ex)
             {
@@ -60,33 +41,37 @@ public class DispatchService(
                 await Task.Delay(100, cancellationToken);
             }
         }
-
-        await ProcessQueuedCallsAsync(cancellationToken);
     }
 
-    private async Task ProcessQueuedCallsAsync(CancellationToken cancellationToken)
+    private async Task<Call> GetNextCall(CancellationToken cancellationToken)
     {
         try
         {
-            var callQueue = await _client.GetCallQueue();
-            if (callQueue == null || callQueue.Count == 0)
+            var call = await _client.GetCallNext();
+            if (call == null)
             {
-                return;
+                var finalStatus = await _client.PostRunStop();
+                LogFinalResults(finalStatus!);
+                _logger.LogInformation("No more calls in queue. Stopping dispatcher.");
+                cancellationToken.ThrowIfCancellationRequested();
+                Environment.Exit(0);
+                throw new EmptyQueueException("No calls in queue");
             }
-
-            _logger.LogInformation($"Processing {callQueue.Count} queued calls");
-
-            var tasks = new List<Task>();
-            foreach (var call in callQueue)
-            {
-                tasks.Add(ProcessCallAsync(call, cancellationToken));
-            }
-
-            await Task.WhenAll(tasks);
+            return call;
+        }
+        catch (EmptyQueueException)
+        {
+            var finalStatus = await _client.PostRunStop();
+            LogFinalResults(finalStatus!);
+            _logger.LogInformation("No more calls in queue. Stopping dispatcher.");
+            cancellationToken.ThrowIfCancellationRequested();
+            Environment.Exit(0);
+            throw;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing queued calls");
+            _logger.LogError(ex, "Error getting next call");
+            throw;
         }
     }
 
@@ -154,104 +139,66 @@ public class DispatchService(
                 continue;
             }
 
-            int availableQuantity;
             try
             {
-                await _apiSemaphore.WaitAsync(cancellationToken);
-
-                try
+                int availableQuantity = await CheckAvailability(
+                    request.ServiceType,
+                    location,
+                    cancellationToken
+                );
+                if (availableQuantity <= 0)
                 {
-                    availableQuantity = await _client.GetServiceAvailabilityByCity(
-                        request.ServiceType,
+                    _blacklistCache.BlacklistLocation(
+                        location.City,
                         location.County,
-                        location.City
+                        request.ServiceType
                     );
-
-                    if (availableQuantity <= 0)
-                    {
-                        _blacklistCache.BlacklistLocation(
-                            location.City,
-                            location.County,
-                            request.ServiceType
-                        );
-                        locationIndex++;
-                        continue;
-                    }
+                    locationIndex++;
+                    continue;
                 }
-                finally
+
+                int confirmedQuantity = await CheckAvailability(
+                    request.ServiceType,
+                    location,
+                    cancellationToken
+                );
+                if (confirmedQuantity <= 0)
                 {
-                    _apiSemaphore.Release();
+                    _blacklistCache.BlacklistLocation(
+                        location.City,
+                        location.County,
+                        request.ServiceType
+                    );
+                    locationIndex++;
+                    continue;
+                }
+
+                int dispatchQuantity = Math.Min(confirmedQuantity, remainingQuantity);
+                await DispatchServices(
+                    request.ServiceType,
+                    location,
+                    call,
+                    dispatchQuantity,
+                    cancellationToken
+                );
+
+                remainingQuantity -= dispatchQuantity;
+
+                if (confirmedQuantity <= dispatchQuantity)
+                {
+                    _blacklistCache.BlacklistLocation(
+                        location.City,
+                        location.County,
+                        request.ServiceType
+                    );
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(
                     ex,
-                    $"Error checking availability in {location.City}, {location.County}"
+                    $"Error processing location {location.City}, {location.County}"
                 );
-                locationIndex++;
-                continue;
-            }
-
-            int dispatchQuantity = Math.Min(availableQuantity, remainingQuantity);
-
-            try
-            {
-                await _apiSemaphore.WaitAsync(cancellationToken);
-
-                try
-                {
-                    int confirmedQuantity = await _client.GetServiceAvailabilityByCity(
-                        request.ServiceType,
-                        location.County,
-                        location.City
-                    );
-
-                    if (confirmedQuantity <= 0)
-                    {
-                        _blacklistCache.BlacklistLocation(
-                            location.City,
-                            location.County,
-                            request.ServiceType
-                        );
-                        locationIndex++;
-                        continue;
-                    }
-
-                    dispatchQuantity = Math.Min(confirmedQuantity, dispatchQuantity);
-
-                    await _client.PostServiceDispatch(
-                        location.County,
-                        location.City,
-                        call.County,
-                        call.City,
-                        dispatchQuantity,
-                        request.ServiceType
-                    );
-
-                    _logger.LogInformation(
-                        $"Dispatched {dispatchQuantity} {request.ServiceType} from {location.City}, {location.County} to {call.City}, {call.County}"
-                    );
-
-                    remainingQuantity -= dispatchQuantity;
-
-                    if (confirmedQuantity <= dispatchQuantity)
-                    {
-                        _blacklistCache.BlacklistLocation(
-                            location.City,
-                            location.County,
-                            request.ServiceType
-                        );
-                    }
-                }
-                finally
-                {
-                    _apiSemaphore.Release();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error dispatching from {location.City}, {location.County}");
             }
 
             locationIndex++;
@@ -262,6 +209,57 @@ public class DispatchService(
             _logger.LogWarning(
                 $"Could not fulfill entire request for {request.ServiceType}. Remaining: {remainingQuantity}"
             );
+        }
+    }
+
+    private async Task<int> CheckAvailability(
+        ServiceType serviceType,
+        CacheItem location,
+        CancellationToken cancellationToken
+    )
+    {
+        await _apiSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            return await _client.GetServiceAvailabilityByCity(
+                serviceType,
+                location.County,
+                location.City
+            );
+        }
+        finally
+        {
+            _apiSemaphore.Release();
+        }
+    }
+
+    private async Task DispatchServices(
+        ServiceType serviceType,
+        CacheItem source,
+        Call target,
+        int quantity,
+        CancellationToken cancellationToken
+    )
+    {
+        await _apiSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            await _client.PostServiceDispatch(
+                source.County,
+                source.City,
+                target.County,
+                target.City,
+                quantity,
+                serviceType
+            );
+
+            _logger.LogInformation(
+                $"Dispatched {quantity} {serviceType} from {source.City}, {source.County} to {target.City}, {target.County}"
+            );
+        }
+        finally
+        {
+            _apiSemaphore.Release();
         }
     }
 

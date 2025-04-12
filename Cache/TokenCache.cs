@@ -1,20 +1,19 @@
 using Microsoft.Extensions.Caching.Memory;
 
-namespace Cache;
+namespace EmergencyDispatcher.Cache;
+
 public class TokenCache
 {
-    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public string GetToken()
     {
-        if (_cache.TryGetValue("token", out string token))
+        if (_cache.TryGetValue("token", out string? token))
         {
             return token ?? string.Empty;
         }
-        else
-        {
-            return string.Empty;
-        }
+
+        return string.Empty;
     }
 
     public void SetToken(string token)
@@ -24,14 +23,11 @@ public class TokenCache
 
     public string GetRefreshToken()
     {
-        if (_cache.TryGetValue("refreshToken", out string refreshToken))
+        if (_cache.TryGetValue("refreshToken", out string? refreshToken))
         {
             return refreshToken ?? string.Empty;
         }
-        else
-        {
-            return string.Empty;
-        }
+        return string.Empty;
     }
 
     public void SetRefreshToken(string refreshToken)

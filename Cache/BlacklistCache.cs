@@ -1,16 +1,12 @@
+using EmergencyDispatcher.Domain.Models;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
-using testing.Models;
 
-public class BlacklistCache
+namespace EmergencyDispatcher.Cache;
+
+public class BlacklistCache(ILogger<BlacklistCache> logger)
 {
-    private readonly ILogger<BlacklistCache> _logger;
-    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
-
-    public BlacklistCache(ILogger<BlacklistCache> logger)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<BlacklistCache> _logger = logger;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public void BlacklistLocation(string city, string county, ServiceType serviceType)
     {
@@ -18,7 +14,7 @@ public class BlacklistCache
 
         if (_cache.Get(key) is not Dictionary<string, bool> blacklistByServiceType)
         {
-            blacklistByServiceType = new Dictionary<string, bool>();
+            blacklistByServiceType = [];
         }
 
         var locationKey = $"{city}::{county}";

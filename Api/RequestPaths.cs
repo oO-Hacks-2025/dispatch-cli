@@ -1,18 +1,19 @@
-namespace testing.ApiClient;
+namespace EmergencyDispatcher.Api;
 
-public class RequestPath
+public static class RequestPaths
 {
     public const string CallNext = "calls/next";
     public const string CallQueue = "calls/queue";
+
     public const string ControlReset = "control/reset";
     public const string ControlStop = "control/stop";
     public const string ControlStatus = "control/status";
+
     public const string Search = "search";
     public const string SearchByCity = "searchbycity";
     public const string Dispatch = "dispatch";
     public const string Locations = "locations";
 
     public const string Login = "auth/login";
-
     public const string RefreshToken = "auth/refreshtoken";
 }

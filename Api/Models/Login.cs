@@ -1,11 +1,16 @@
 using System.Text.Json.Serialization;
 
-namespace testing.Models;
-/// <summary>
-///  Call represents a service call with its location and the number of ambulances requested.
-/// </summary>
-/// <param name="token"></param>
-/// <param name="refreshToken"></param>
+namespace EmergencyDispatcher.Api.Models;
+
+public class LoginRequest(string userName, string password)
+{
+    [JsonPropertyName("userName")]
+    public string UserName { get; private set; } = userName;
+
+    [JsonPropertyName("password")]
+    public string Password { get; private set; } = password;
+}
+
 public class LoginResponse(string token, string refreshToken)
 {
     [JsonPropertyName("Token")]

@@ -1,4 +1,4 @@
-namespace Cache;
+namespace EmergencyDispatcher.Cache;
 
 public class CacheItem
 {

@@ -1,10 +1,7 @@
 using System.Text.Json.Serialization;
 
-namespace testing.Models;
+namespace EmergencyDispatcher.Domain.Models;
 
-/// <summary>
-/// ServiceType represents the type of service requested.
-/// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum ServiceType
 {

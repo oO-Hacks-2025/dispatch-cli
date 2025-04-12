@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "testing": {
+    "EmergencyDispatcher": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {

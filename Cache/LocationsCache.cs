@@ -1,21 +1,14 @@
+using EmergencyDispatcher.Api;
+using EmergencyDispatcher.Domain.Models;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
-using testing.ApiClient;
-using testing.Models;
 
-namespace Cache;
+namespace EmergencyDispatcher.Cache;
 
-public class LocationsCache
+public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> logger)
 {
-    private readonly ApiClient _clientService;
-    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
-    private readonly ILogger<LocationsCache> _logger;
-
-    public LocationsCache(ApiClient clientService, ILogger<LocationsCache> logger)
-    {
-        _clientService = clientService;
-        _logger = logger;
-    }
+    private readonly ApiClient _clientService = clientService;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+    private readonly ILogger<LocationsCache> _logger = logger;
 
     private async Task<List<City>> GetLocations()
     {
