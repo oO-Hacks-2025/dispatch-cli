@@ -11,8 +11,8 @@ class Program
     static async Task Main(string[] args)
     {
         var seed = Environment.GetEnvironmentVariable("SEED") ?? "default";
-        var targetDispatches = int.Parse(Environment.GetEnvironmentVariable("TARGET_DISPATCHES"));
-        var maxActiveCalls = int.Parse(Environment.GetEnvironmentVariable("MAX_ACTIVE_CALLS"));
+        var targetDispatches = int.Parse(Environment.GetEnvironmentVariable("TARGET_DISPATCHES") ?? "50");
+        var maxActiveCalls = int.Parse(Environment.GetEnvironmentVariable("MAX_ACTIVE_CALLS") ?? "10");
 
         var logLevelEnv = Environment.GetEnvironmentVariable("LOG_LEVEL");
         var logLevel = logLevelEnv switch
@@ -25,6 +25,13 @@ class Program
             _ => LogLevel.Information
         };
 
+        var dispatchingDataEndpoint = Environment.GetEnvironmentVariable("DISPATCHING_DATA_ENDPOINT");
+        if (string.IsNullOrEmpty(dispatchingDataEndpoint))
+        {
+            Console.WriteLine("DISPATCHING_DATA_ENDPOINT environment variable is not set.");
+            return;
+        }
+
         var logger = new Logger<Program>(new LoggerFactory());
         var tokenCache = new TokenCache();
         using var host = Host.CreateDefaultBuilder(args)
@@ -33,7 +40,7 @@ class Program
                 {
                     services.AddSingleton<ApiClient>(provider => new ApiClient(
                         tokenCache,
-                        "http://localhost:5000/",
+                        dispatchingDataEndpoint,
                         "object Object UA"
                     ));
                     services.AddSingleton<LocationsCache>();
@@ -96,8 +103,6 @@ class Program
         try
         {
             await dispatcher.RunDispatcher(
-                targetDispatches: 50,
-                maxActiveCalls: 10,
                 cancellationToken: cts.Token
             );
         }

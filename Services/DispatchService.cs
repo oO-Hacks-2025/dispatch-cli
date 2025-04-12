@@ -20,8 +20,6 @@ public class DispatchService(
     private readonly ConcurrentDictionary<string, int> _availabilityCache = new();
 
     public async Task RunDispatcher(
-        int targetDispatches,
-        int maxActiveCalls,
         CancellationToken cancellationToken = default
     )
     {
@@ -29,9 +27,7 @@ public class DispatchService(
 
         await _locationsCache.GenerateCache();
 
-        int processedCalls = 0;
-
-        while (!cancellationToken.IsCancellationRequested && processedCalls < targetDispatches)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
@@ -41,10 +37,6 @@ public class DispatchService(
                     call =
                         await _client.GetCallNext()
                         ?? throw new EmptyQueueException("No calls in queue");
-                    processedCalls++;
-                    _logger.LogInformation(
-                        $"Processing call {processedCalls}/{targetDispatches} for {call.City} in {call.County}"
-                    );
                 }
                 catch (EmptyQueueException)
                 {

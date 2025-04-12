@@ -9,7 +9,7 @@ public class TokenCache
     {
         if (_cache.TryGetValue("token", out string token))
         {
-            return token;
+            return token ?? string.Empty;
         }
         else
         {
@@ -26,7 +26,7 @@ public class TokenCache
     {
         if (_cache.TryGetValue("refreshToken", out string refreshToken))
         {
-            return refreshToken;
+            return refreshToken ?? string.Empty;
         }
         else
         {

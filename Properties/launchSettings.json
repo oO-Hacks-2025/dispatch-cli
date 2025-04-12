@@ -5,10 +5,11 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "MAX_ACTIVE_CALLS": "10",
-        "TARGET_DISPATCHES": "50",
+        "MAX_ACTIVE_CALLS": "3",
+        "TARGET_DISPATCHES": "10",
         "SEED": "default",
         "LOG_LEVEL": "Debug",
+        "DISPATCHING_DATA_ENDPOINT": "http://localhost:5000"
       },
       "applicationUrl": "https://localhost:49187;http://localhost:49188"
     }
