@@ -49,7 +49,7 @@ public class ApiClient
             .Or<JsonException>()
             .WaitAndRetryAsync(
                 7,
-                retryAttempt => TimeSpan.FromMicroseconds(10),
+                retryAttempt => TimeSpan.FromMilliseconds(Math.Pow(2, retryAttempt)),
                 onRetry: (exception, timeSpan, retryCount, context) =>
                 {
                     _logger.LogWarning(
@@ -58,7 +58,7 @@ public class ApiClient
     }
 
     #region Control Operations
-    public async Task<GameStatus?> PostRunReset(string seed , int targetDispatches , int maxActiveCalls)
+    public async Task<GameStatus?> PostRunReset(string seed, int targetDispatches, int maxActiveCalls)
     {
         return await _retryPolicy.ExecuteAsync(async () =>
         {
