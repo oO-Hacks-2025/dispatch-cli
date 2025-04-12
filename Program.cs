@@ -1,4 +1,4 @@
-﻿using Cache;
+using Cache;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,7 +19,6 @@ IHost host = Host.CreateDefaultBuilder(args)
 ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
 ILogger<LocationsCache> cacheLogger = host.Services.GetRequiredService<ILogger<LocationsCache>>();
 
-logger.LogInformation("Starting the HTTP client setup...");
 
 using HttpClient client = new();
 client.DefaultRequestHeaders.Accept.Clear();
