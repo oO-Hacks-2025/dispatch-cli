@@ -1,11 +1,7 @@
 using Cache;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using testing.ApiClient;
-using testing.Models;
 
 IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureLogging(logging =>
@@ -32,3 +28,11 @@ logger.LogInformation("HTTP client configured.");
 var cache = new LocationsCache(apiClient, cacheLogger);
 
 var cacheGenerated = await cache.GenerateCache();
+
+DispatchService dispatchService = new DispatchService(apiClient, cache);
+
+await dispatchService.Dispatch();
+
+var result = await apiClient.GetRunStatus();
+
+logger.LogInformation(JsonSerializer.Serialize(result));
