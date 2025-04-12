@@ -255,3 +255,5 @@ The `version/api-no-auth` branch contains the supporting levels 1-4 (contains th
   }
 ]
 ```
+
+Disclaimer: These results were obtained on a rusty MSI laptop which was ran over by a car and which overheats from the air conditioning.
