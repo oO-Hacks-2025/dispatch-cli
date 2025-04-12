@@ -1,36 +1,71 @@
 using Cache;
-using System.Net.Http.Headers;
-using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using testing.ApiClient;
+using testing.Services;
 
-IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureLogging(logging =>
+class Program
+{
+    static async Task Main(string[] args)
     {
-        logging.ClearProviders();
-        logging.AddConsole();
-        logging.SetMinimumLevel(LogLevel.Debug);
-    })
-    .Build();
+        using var host = Host.CreateDefaultBuilder(args)
+            .ConfigureServices(
+                (context, services) =>
+                {
+                    services.AddSingleton<ApiClient>(provider => new ApiClient(
+                        "http://localhost:5000/",
+                        "object Object UA"
+                    ));
+                    services.AddSingleton<LocationsCache>();
+                    services.AddSingleton<BlacklistCache>();
+                    services.AddSingleton<DispatchService>();
+                }
+            )
+            .ConfigureLogging(logging =>
+            {
+                logging.ClearProviders();
+                logging.AddConsole();
+                logging.SetMinimumLevel(LogLevel.Information);
+            })
+            .Build();
 
-ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
-ILogger<LocationsCache> locationsCacheLogger = host.Services.GetRequiredService<ILogger<LocationsCache>>();
-ILogger<BlacklistCache> blacklistCacheLogger = host.Services.GetRequiredService<ILogger<BlacklistCache>>();
-ILogger<DispatchService> dispatchLogger = host.Services.GetRequiredService<ILogger<DispatchService>>();
+        var cts = new CancellationTokenSource();
 
-var apiClient = new ApiClient();
+        var count = 0;
+        Console.CancelKeyPress += (sender, e) =>
+        {
+            count++;
+            Console.WriteLine("Shutting down...");
+            cts.Cancel();
+            e.Cancel = true;
+            if (count > 1)
+            {
+                Console.WriteLine("Forcefully shutting down...");
+                Environment.Exit(0);
+            }
+        };
 
-logger.LogInformation("HTTP client configured.");
+        var dispatcher = host.Services.GetRequiredService<DispatchService>();
 
-var locationsCache = new LocationsCache(apiClient, locationsCacheLogger);
-var blacklistCache = new BlacklistCache(blacklistCacheLogger);
+        try
+        {
+            await dispatcher.RunDispatcher(
+                targetDispatches: 50,
+                maxActiveCalls: 10,
+                cancellationToken: cts.Token
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            Console.WriteLine("Operation was canceled");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+        }
 
-var cacheGenerated = await locationsCache.GenerateCache();
-
-DispatchService dispatchService = new DispatchService(apiClient, locationsCache, blacklistCache, dispatchLogger);
-
-var emergencyCall = await apiClient.GetCallNext();
-await dispatchService.Dispatch(emergencyCall);
-
-var result = await apiClient.GetRunStatus();
-
-logger.LogInformation(JsonSerializer.Serialize(result));
+        Console.WriteLine("Press any key to exit...");
+        Console.ReadKey();
+    }
+}

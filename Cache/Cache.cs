@@ -5,51 +5,60 @@ using testing.Models;
 
 namespace Cache;
 
-public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> logger)
+public class LocationsCache
 {
-    ApiClient _clientService = clientService;
+    private readonly ApiClient _clientService;
     private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
-    private readonly ILogger<LocationsCache> _logger = logger;
-    private List<string> _availabilites = [
+    private readonly ILogger<LocationsCache> _logger;
+    private readonly List<string> _serviceTypes =
+    [
         ServiceType.Fire.ToString(),
         ServiceType.Police.ToString(),
         ServiceType.Medical.ToString(),
         ServiceType.Rescue.ToString(),
-        ServiceType.Utility.ToString()
+        ServiceType.Utility.ToString(),
     ];
-    private ApiClient apiClient;
-    private ILogger<LocationsCache> cacheLogger;
 
-    private async Task<List<City>> _getLocations()
+    public LocationsCache(ApiClient clientService, ILogger<LocationsCache> logger)
     {
-        var locations = await _clientService.GetLocations();
-        return locations ?? throw new Exception("Locations not found.");
+        _clientService = clientService;
+        _logger = logger;
     }
 
-    private async Task<List<Availability>> _getMunicipalities()
+    private async Task<List<City>> GetLocations()
     {
-        return await _clientService.GetServiceAvailability(ServiceType.Medical);
+        var locations = await _clientService.GetLocations();
+        return locations ?? throw new Exception("Failed to fetch locations from API.");
+    }
+
+    private async Task<List<Availability>> GetMunicipalities()
+    {
+        return await _clientService.GetServiceAvailability(ServiceType.Medical)
+            ?? throw new Exception("Failed to fetch municipalities from API.");
     }
 
     public async Task<bool> GenerateCache()
     {
-        _logger.LogDebug("Generating distances cache...");
+        _logger.LogInformation("Generating locations cache...");
 
-        _logger.LogDebug("Fetching required data for distances cache generation...");
+        _logger.LogInformation("Fetching required data for cache generation...");
 
-        var locations = await _getLocations();
+        var locations = await GetLocations();
+        _logger.LogInformation($"Fetched {locations.Count} locations");
 
-        _logger.LogDebug("Building distances cache...");
+        var municipalities = await GetMunicipalities();
+        _logger.LogInformation($"Fetched {municipalities.Count} municipalities");
 
-        var countyMunicipalities = await _getMunicipalities();
+        _logger.LogInformation("Building distances cache...");
 
         foreach (var target in locations)
         {
-            var key = _buildKey(target.Name, target.County);
+            var key = BuildKey(target.Name, target.County);
             var listOfSources = new List<CacheItem>();
 
-            foreach (var source in countyMunicipalities)
+            foreach (var source in municipalities)
             {
+                // Don't include the target city itself
                 if (source.City == target.Name && source.County == target.County)
                 {
                     continue;
@@ -57,36 +66,34 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
                 var distance = ComputeDistance(target, source);
 
-                listOfSources.Add(new CacheItem
-                {
-                    City = source.City,
-                    County = source.County,
-                    Distance = distance,
-                });
+                listOfSources.Add(
+                    new CacheItem
+                    {
+                        City = source.City,
+                        County = source.County,
+                        Distance = distance,
+                    }
+                );
             }
 
-            listOfSources.Sort((first, second) =>
-            {
-                if (first.Distance == second.Distance)
-                {
-                    return 0;
-                }
-                return first.Distance < second.Distance ? -1 : 1;
-            });
+            // Sort by distance (closest first)
+            listOfSources.Sort((first, second) => first.Distance.CompareTo(second.Distance));
 
             _cache.Set(key, listOfSources);
         }
 
-        _logger.LogDebug("Distances cache successfully generated.");
+        _logger.LogInformation("Locations cache successfully generated");
         return true;
     }
 
     private static double ComputeDistance(City target, Availability source)
     {
-        return Math.Sqrt(Math.Pow(target.Lat - source.Latitude, 2) + Math.Pow(target.Long - source.Longitude, 2));
+        return Math.Sqrt(
+            Math.Pow(target.Lat - source.Latitude, 2) + Math.Pow(target.Long - source.Longitude, 2)
+        );
     }
 
-    private static string _buildKey(string city, string county)
+    private static string BuildKey(string city, string county)
     {
         return $"{city}::{county}";
     }
@@ -100,18 +107,17 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
         throw new KeyNotFoundException($"Key '{key}' not found in cache.");
     }
-
-    public async Task<List<City>> GetTestVals()
-    {
-        var locations = await _getLocations();
-        return locations;
-    }
 }
 
-public class BlacklistCache(ILogger<BlacklistCache> logger)
+public class BlacklistCache
 {
-    private readonly ILogger<BlacklistCache> _logger = logger;
+    private readonly ILogger<BlacklistCache> _logger;
     private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+
+    public BlacklistCache(ILogger<BlacklistCache> logger)
+    {
+        _logger = logger;
+    }
 
     public void BlacklistLocation(string city, string county, ServiceType serviceType)
     {
@@ -122,8 +128,13 @@ public class BlacklistCache(ILogger<BlacklistCache> logger)
             blacklistByServiceType = new Dictionary<string, bool>();
         }
 
-        blacklistByServiceType[$"{city}::{county}"] = true;
-        _cache.Set(key, blacklistByServiceType);
+        var locationKey = $"{city}::{county}";
+        if (!blacklistByServiceType.ContainsKey(locationKey))
+        {
+            _logger.LogDebug($"Blacklisting {city}, {county} for {serviceType}");
+            blacklistByServiceType[locationKey] = true;
+            _cache.Set(key, blacklistByServiceType);
+        }
     }
 
     public bool IsBlacklisted(ServiceType serviceTypeKey, string locationKey)
@@ -132,7 +143,8 @@ public class BlacklistCache(ILogger<BlacklistCache> logger)
 
         if (_cache.TryGetValue(key, out var value))
         {
-            return value is Dictionary<string, bool> blacklistByServiceType && blacklistByServiceType.ContainsKey(locationKey);
+            return value is Dictionary<string, bool> blacklistByServiceType
+                && blacklistByServiceType.ContainsKey(locationKey);
         }
 
         return false;
@@ -141,7 +153,7 @@ public class BlacklistCache(ILogger<BlacklistCache> logger)
 
 public class CacheItem
 {
-    public string City { get; set; }
-    public string County { get; set; }
+    public required string City { get; set; }
+    public required string County { get; set; }
     public double Distance { get; set; }
 }
