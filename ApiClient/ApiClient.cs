@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using System.Net;
@@ -13,10 +14,17 @@ public class ApiClient
     private readonly AsyncRetryPolicy _retryPolicy;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    private readonly ILogger<ApiClient> _logger;
+
     public ApiClient(
         string baseUrl = "http://localhost:5000/",
         string userAgent = "object Object agent")
     {
+        _logger = LoggerFactory.Create(builder =>
+        {
+            builder.AddConsole();
+            builder.SetMinimumLevel(LogLevel.Debug);
+        }).CreateLogger<ApiClient>();
         _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
         _httpClient.DefaultRequestHeaders.Accept.Clear();
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -43,7 +51,7 @@ public class ApiClient
                 retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                 onRetry: (exception, timeSpan, retryCount, context) =>
                 {
-                    Console.WriteLine(
+                    _logger.LogWarning(
                           $"Retry {retryCount} encountered an error: {exception.Message}. Waiting {timeSpan} before next retry.");
                 });
     }
@@ -93,7 +101,7 @@ public class ApiClient
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                Console.WriteLine("No calls in queue");
+                _logger.LogError("No calls in queue");
                 throw new EmptyQueueException("No calls in queue");
             }
 
@@ -140,19 +148,19 @@ public class ApiClient
 
             if (availability.Any(a => a.Latitude < -90 || a.Latitude > 90 || a.Longitude < -180 || a.Longitude > 180))
             {
-                Console.WriteLine($"Invalid coordinates: {JsonSerializer.Serialize(availability, _jsonOptions)}");
+                _logger.LogError($"Invalid coordinates: {JsonSerializer.Serialize(availability, _jsonOptions)}");
                 throw new ValidationException("Server returned invalid availability entries");
             }
 
             if (availability.Any(a => string.IsNullOrWhiteSpace(a.County) || string.IsNullOrWhiteSpace(a.City)))
             {
-                Console.WriteLine($"Invalid county/city: {JsonSerializer.Serialize(availability, _jsonOptions)}");
+                _logger.LogError($"Invalid coordinates: {JsonSerializer.Serialize(availability, _jsonOptions)}");
                 throw new ValidationException("Server returned invalid availability entries");
             }
 
             if (availability.Any(a => a.Quantity < 0))
             {
-                Console.WriteLine($"Invalid quantity: {JsonSerializer.Serialize(availability, _jsonOptions)}");
+                _logger.LogError($"Invalid coordinates: {JsonSerializer.Serialize(availability, _jsonOptions)}");
                 throw new ValidationException("Server returned invalid availability entries");
             }
 

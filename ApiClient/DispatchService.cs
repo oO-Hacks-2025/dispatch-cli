@@ -62,9 +62,7 @@ namespace testing.ApiClient
                                                request.ServiceType);
 
                         remainingQty = 0;
-                        return;
                     }
-
 
                     if (availableQty > 0 && availableQty < remainingQty)
                     {
@@ -78,9 +76,13 @@ namespace testing.ApiClient
                         remainingQty -= availableQty;
                     }
 
+                    if (availableQty == 0)
+                    {
+                        sourceCityIndex++;
+                    }
+
                     _logger.LogInformation($"[Emergency::{emergencyCall.City}::{emergencyCall.County}] Dispatched {request.Quantity} of {request.ServiceType} from {location.City} in {location.County} to {emergencyCall.City} in {emergencyCall.County}");
 
-                    sourceCityIndex++;
                 }
             }
         }
