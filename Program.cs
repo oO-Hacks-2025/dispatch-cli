@@ -13,18 +13,20 @@ IHost host = Host.CreateDefaultBuilder(args)
     .Build();
 
 ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
-ILogger<LocationsCache> cacheLogger = host.Services.GetRequiredService<ILogger<LocationsCache>>();
+ILogger<LocationsCache> locationsCacheLogger = host.Services.GetRequiredService<ILogger<LocationsCache>>();
+ILogger<BlacklistCache> blacklistCacheLogger = host.Services.GetRequiredService<ILogger<BlacklistCache>>();
 ILogger<DispatchService> dispatchLogger = host.Services.GetRequiredService<ILogger<DispatchService>>();
 
 var apiClient = new ApiClient();
 
 logger.LogInformation("HTTP client configured.");
 
-var cache = new LocationsCache(apiClient, cacheLogger);
+var locationsCache = new LocationsCache(apiClient, locationsCacheLogger);
+var blacklistCache = new BlacklistCache(blacklistCacheLogger);
 
-var cacheGenerated = await cache.GenerateCache();
+var cacheGenerated = await locationsCache.GenerateCache();
 
-DispatchService dispatchService = new DispatchService(apiClient, cache, dispatchLogger);
+DispatchService dispatchService = new DispatchService(apiClient, locationsCache, blacklistCache, dispatchLogger);
 
 var emergencyCall = await apiClient.GetCallNext();
 await dispatchService.Dispatch(emergencyCall);

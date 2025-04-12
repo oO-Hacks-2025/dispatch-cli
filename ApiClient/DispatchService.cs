@@ -8,12 +8,14 @@ namespace testing.ApiClient
     {
         private readonly ApiClient _client;
         private readonly LocationsCache _locationsCache;
+        private readonly BlacklistCache _blacklistCache;
         private readonly ILogger<DispatchService> _logger;
 
-        public DispatchService(ApiClient client, LocationsCache locationsCache, ILogger<DispatchService> logger)
+        public DispatchService(ApiClient client, LocationsCache locationsCache, BlacklistCache blacklistCache, ILogger<DispatchService> logger)
         {
             _client = client;
             _locationsCache = locationsCache;
+            _blacklistCache = blacklistCache;
             _logger = logger;
         }
 
@@ -43,16 +45,22 @@ namespace testing.ApiClient
                 {
                     continue;
                 }
-                var remainingQty = request.Quantity;
+                var requestQuantity = request.Quantity;
                 var sourceCityIndex = 0;
 
-                while (remainingQty > 0 && sourceCityIndex < locations.Count)
+                while (requestQuantity > 0 && sourceCityIndex < locations.Count)
                 {
                     var location = locations[sourceCityIndex];
 
+                    if (_blacklistCache.IsBlacklisted(request.ServiceType, $"{location.City}::{location.County}"))
+                    {
+                        sourceCityIndex++;
+                        continue;
+                    }
+
                     var availableQty = await _client.GetServiceAvailabilityByCity((ServiceType)request.ServiceType, location.County, location.City);
 
-                    if (availableQty >= remainingQty)
+                    if (availableQty >= requestQuantity)
                     {
                         await _client.PostServiceDispatch(location.County,
                                                location.City,
@@ -61,10 +69,15 @@ namespace testing.ApiClient
                                                request.Quantity,
                                                request.ServiceType);
 
-                        remainingQty = 0;
+                        if (availableQty == requestQuantity)
+                        {
+                            _blacklistCache.BlacklistLocation(location.City, location.County, request.ServiceType);
+                        }
+
+                        requestQuantity = 0;
                     }
 
-                    if (availableQty > 0 && availableQty < remainingQty)
+                    if (availableQty > 0 && availableQty < requestQuantity)
                     {
                         await _client.PostServiceDispatch(location.County,
                                                location.City,
@@ -73,7 +86,9 @@ namespace testing.ApiClient
                                                availableQty,
                                                request.ServiceType);
 
-                        remainingQty -= availableQty;
+                        requestQuantity -= availableQty;
+
+                        _blacklistCache.BlacklistLocation(location.City, location.County, request.ServiceType);
                     }
 
                     if (availableQty == 0)

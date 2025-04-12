@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using testing.ApiClient;
 using testing.Models;
 
@@ -16,6 +17,8 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         ServiceType.Rescue.ToString(),
         ServiceType.Utility.ToString()
     ];
+    private ApiClient apiClient;
+    private ILogger<LocationsCache> cacheLogger;
 
     private async Task<List<City>> _getLocations()
     {
@@ -102,6 +105,37 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
     {
         var locations = await _getLocations();
         return locations;
+    }
+}
+
+public class BlacklistCache(ILogger<BlacklistCache> logger)
+{
+    private readonly ILogger<BlacklistCache> _logger = logger;
+    private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+
+    public void BlacklistLocation(string city, string county, ServiceType serviceType)
+    {
+        var key = $"{serviceType}";
+
+        if (_cache.Get(key) is not Dictionary<string, bool> blacklistByServiceType)
+        {
+            blacklistByServiceType = new Dictionary<string, bool>();
+        }
+
+        blacklistByServiceType[$"{city}::{county}"] = true;
+        _cache.Set(key, blacklistByServiceType);
+    }
+
+    public bool IsBlacklisted(ServiceType serviceTypeKey, string locationKey)
+    {
+        var key = $"{serviceTypeKey}";
+
+        if (_cache.TryGetValue(key, out var value))
+        {
+            return value is Dictionary<string, bool> blacklistByServiceType && blacklistByServiceType.ContainsKey(locationKey);
+        }
+
+        return false;
     }
 }
 
