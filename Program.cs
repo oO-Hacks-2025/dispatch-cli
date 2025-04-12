@@ -14,12 +14,7 @@ IHost host = Host.CreateDefaultBuilder(args)
 
 ILogger<Program> logger = host.Services.GetRequiredService<ILogger<Program>>();
 ILogger<LocationsCache> cacheLogger = host.Services.GetRequiredService<ILogger<LocationsCache>>();
-
-
-using HttpClient client = new();
-client.DefaultRequestHeaders.Accept.Clear();
-client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-client.DefaultRequestHeaders.Add("User-Agent", "object Object agent");
+ILogger<DispatchService> dispatchLogger = host.Services.GetRequiredService<ILogger<DispatchService>>();
 
 var apiClient = new ApiClient();
 
@@ -29,9 +24,10 @@ var cache = new LocationsCache(apiClient, cacheLogger);
 
 var cacheGenerated = await cache.GenerateCache();
 
-DispatchService dispatchService = new DispatchService(apiClient, cache);
+DispatchService dispatchService = new DispatchService(apiClient, cache, dispatchLogger);
 
-await dispatchService.Dispatch();
+var emergencyCall = await apiClient.GetCallNext();
+await dispatchService.Dispatch(emergencyCall);
 
 var result = await apiClient.GetRunStatus();
 

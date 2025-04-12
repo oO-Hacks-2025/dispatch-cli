@@ -164,7 +164,7 @@ public class ApiClient
     {
         return await _retryPolicy.ExecuteAsync(async () =>
         {
-            var endpoint = $"{serviceType}/{RequestPath.SearchByCity}?county={WebUtility.UrlEncode(county)}&city={WebUtility.UrlEncode(city)}";
+            var endpoint = $"/{serviceType}/{RequestPath.SearchByCity}?county={WebUtility.UrlEncode(county)}&city={WebUtility.UrlEncode(city)}";
             var response = await _httpClient.GetAsync(endpoint);
             response.EnsureSuccessStatusCode();
 
@@ -193,7 +193,7 @@ public class ApiClient
         return await _retryPolicy.ExecuteAsync(async () =>
         {
             var dispatch = new Dispatch(sourceCounty, sourceCity, targetCounty, targetCity, quantity);
-            var endpoint = $"{serviceType}/{RequestPath.Dispatch}";
+            var endpoint = $"/{serviceType}/{RequestPath.Dispatch}";
             var response = await _httpClient.PostAsJsonAsync(endpoint, dispatch, _jsonOptions);
             response.EnsureSuccessStatusCode();
             return true;

@@ -1,4 +1,5 @@
-﻿using Cache;
+﻿using System.Text.Json;
+using Cache;
 using testing.Models;
 
 namespace testing.ApiClient
@@ -7,28 +8,18 @@ namespace testing.ApiClient
     {
         private readonly ApiClient _client;
         private readonly LocationsCache _locationsCache;
+        private readonly ILogger<DispatchService> _logger;
 
-        public DispatchService(ApiClient client, LocationsCache locationsCache)
+        public DispatchService(ApiClient client, LocationsCache locationsCache, ILogger<DispatchService> logger)
         {
             _client = client;
             _locationsCache = locationsCache;
+            _logger = logger;
         }
 
-        public async Task Dispatch()
+        public async Task Dispatch(Call emergencyCall)
         {
-
-
-            Call emergencyCall;
-            try
-            {
-                emergencyCall = await _client.GetCallNext();
-
-            }
-            catch (Exception ex)
-            {
-                return;
-
-            }
+            _logger.LogInformation($"Dispatching service for {emergencyCall.City} in {emergencyCall.County}...");
 
             if (emergencyCall is null || emergencyCall.Requests is null)
             {
@@ -42,8 +33,12 @@ namespace testing.ApiClient
                 return;
             }
 
+            _logger.LogError($"{JsonSerializer.Serialize(emergencyCall.Requests)}");
+
             foreach (var request in emergencyCall.Requests)
             {
+                _logger.LogInformation($"Processing request for {request.ServiceType} with quantity {request.Quantity}...");
+
                 if (request is null)
                 {
                     continue;
@@ -82,6 +77,8 @@ namespace testing.ApiClient
 
                         remainingQty -= availableQty;
                     }
+
+                    _logger.LogInformation($"[Emergency::{emergencyCall.City}::{emergencyCall.County}] Dispatched {request.Quantity} of {request.ServiceType} from {location.City} in {location.County} to {emergencyCall.City} in {emergencyCall.County}");
 
                     sourceCityIndex++;
                 }
