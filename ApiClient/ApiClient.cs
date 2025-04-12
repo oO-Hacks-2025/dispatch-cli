@@ -84,12 +84,12 @@ public class ApiClient : HttpClient
         return result;
     }
 
-    public async Task<int> SearchByCity(ServiceType serviceType, City city)
+    public async Task<int> SearchByCity(ServiceType serviceType, string city, string county)
     {
         var query = new Dictionary<string, string>
         {
-            { "county", city.County },
-            { "city", city.Name }
+            { "county", county },
+            { "city", city }
         };
         var queryString = string.Join("&", query.Select(kvp => $"{kvp.Key}={WebUtility.UrlEncode(kvp.Value)}"));
         var stream = await GetStreamAsync($"{serviceType}/{RequestPath.SearchByCity}?{queryString}");
@@ -97,10 +97,10 @@ public class ApiClient : HttpClient
         return count;
     }
 
-    public async Task<string> Dispatch(string sourceCounty, string sourceCity, string targetCounty, string targetCity, int quantity)
+    public async Task<string> Dispatch(string sourceCounty, string sourceCity, string targetCounty, string targetCity, int quantity, ServiceType serviceType)
     {
         var httpContent = new StringContent(JsonSerializer.Serialize(new Dispatch(sourceCounty, sourceCity, targetCounty, targetCity, quantity)));
-        var result = await PostAsync(RequestPath.Dispatch, httpContent);
+        var result = await PostAsync($"/{serviceType}/{RequestPath.Dispatch}", httpContent);
         if (!result.IsSuccessStatusCode)
         {
             throw new Exception($"Failed to dispatch the game. Status code: {result.StatusCode}");

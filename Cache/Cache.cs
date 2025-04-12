@@ -1,6 +1,3 @@
-using System.Reflection.Metadata;
-using System.Text.Json;
-using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using testing.ApiClient;
@@ -40,6 +37,11 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         return [.. availabilityBatches.SelectMany(availability => availability)];
     }
 
+    private async Task<List<Availability>> _getMunicipalities()
+    {
+        return await _clientService.Search(ServiceType.Medical);
+    }
+
     public async Task<bool> GenerateCache()
     {
         _logger.LogDebug("Generating distances cache...");
@@ -48,14 +50,17 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         var locations = await _getLocations();
 
         _logger.LogDebug("Building distances cache...");
+
+        var countyMunicipalities = await _getMunicipalities();
+
         foreach (var target in locations)
         {
             var key = _buildKey(target.Name, target.County);
             var listOfSources = new List<CacheItem>();
 
-            foreach (var source in locations)
+            foreach (var source in countyMunicipalities)
             {
-                if (source.Name == target.Name && source.County == target.County)
+                if (source.City == target.Name && source.County == target.County)
                 {
                     continue;
                 }
@@ -64,7 +69,8 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
                 listOfSources.Add(new CacheItem
                 {
-                    Name = _buildKey(source.Name, source.County),
+                    City = source.City,
+                    County = source.County,
                     Distance = distance,
                 });
             }
@@ -85,9 +91,9 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         return true;
     }
 
-    private static double ComputeDistance(City target, City source)
+    private static double ComputeDistance(City target, Availability source)
     {
-        return Math.Sqrt(Math.Pow(target.Lat - source.Lat, 2) + Math.Pow(target.Long - source.Long, 2));
+        return Math.Sqrt(Math.Pow(target.Lat - source.Latitude, 2) + Math.Pow(target.Long - source.Longitude, 2));
     }
 
     private static string _buildKey(string city, string county)
@@ -114,6 +120,7 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
 public class CacheItem
 {
-    public string Name { get; set; }
+    public string City { get; set; }
+    public string County { get; set; }
     public double Distance { get; set; }
 }
