@@ -27,11 +27,6 @@ public class DispatchService(
     {
         _logger.LogInformation("Starting emergency dispatch service");
 
-        var status = await _client.PostRunReset(seed: "default", targetDispatches, maxActiveCalls);
-        _logger.LogInformation(
-            $"Simulation started. Target: {status?.TargetDispatches} dispatches"
-        );
-
         await _locationsCache.GenerateCache();
 
         int processedCalls = 0;
