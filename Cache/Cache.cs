@@ -10,12 +10,13 @@ public class LocationsCache
     private readonly ApiClient _clientService;
     private readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
     private readonly ILogger<LocationsCache> _logger;
-    private readonly List<string> _serviceTypes = [
+    private readonly List<string> _serviceTypes =
+    [
         ServiceType.Fire.ToString(),
         ServiceType.Police.ToString(),
         ServiceType.Medical.ToString(),
         ServiceType.Rescue.ToString(),
-        ServiceType.Utility.ToString()
+        ServiceType.Utility.ToString(),
     ];
 
     public LocationsCache(ApiClient clientService, ILogger<LocationsCache> logger)
@@ -65,12 +66,14 @@ public class LocationsCache
 
                 var distance = ComputeDistance(target, source);
 
-                listOfSources.Add(new CacheItem
-                {
-                    City = source.City,
-                    County = source.County,
-                    Distance = distance,
-                });
+                listOfSources.Add(
+                    new CacheItem
+                    {
+                        City = source.City,
+                        County = source.County,
+                        Distance = distance,
+                    }
+                );
             }
 
             // Sort by distance (closest first)
@@ -85,7 +88,9 @@ public class LocationsCache
 
     private static double ComputeDistance(City target, Availability source)
     {
-        return Math.Sqrt(Math.Pow(target.Lat - source.Latitude, 2) + Math.Pow(target.Long - source.Longitude, 2));
+        return Math.Sqrt(
+            Math.Pow(target.Lat - source.Latitude, 2) + Math.Pow(target.Long - source.Longitude, 2)
+        );
     }
 
     private static string BuildKey(string city, string county)
@@ -138,7 +143,8 @@ public class BlacklistCache
 
         if (_cache.TryGetValue(key, out var value))
         {
-            return value is Dictionary<string, bool> blacklistByServiceType && blacklistByServiceType.ContainsKey(locationKey);
+            return value is Dictionary<string, bool> blacklistByServiceType
+                && blacklistByServiceType.ContainsKey(locationKey);
         }
 
         return false;

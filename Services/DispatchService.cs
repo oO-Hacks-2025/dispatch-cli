@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
+using Cache;
 using testing.ApiClient;
 using testing.Models;
-using Cache;
 
 namespace testing.Services;
 
@@ -9,7 +9,8 @@ public class DispatchService(
     ApiClient.ApiClient client,
     LocationsCache locationsCache,
     BlacklistCache blacklistCache,
-    ILogger<DispatchService> logger)
+    ILogger<DispatchService> logger
+)
 {
     private readonly ApiClient.ApiClient _client = client;
     private readonly LocationsCache _locationsCache = locationsCache;
@@ -18,12 +19,18 @@ public class DispatchService(
     private readonly SemaphoreSlim _apiSemaphore = new(10);
     private readonly ConcurrentDictionary<string, int> _availabilityCache = new();
 
-    public async Task RunDispatcher(int targetDispatches = 100, int maxActiveCalls = 30, CancellationToken cancellationToken = default)
+    public async Task RunDispatcher(
+        int targetDispatches,
+        int maxActiveCalls,
+        CancellationToken cancellationToken = default
+    )
     {
         _logger.LogInformation("Starting emergency dispatch service");
 
-        var status = await _client.PostRunReset(targetDispatches: targetDispatches, maxActiveCalls: maxActiveCalls);
-        _logger.LogInformation($"Simulation started. Target: {status?.TargetDispatches} dispatches");
+        var status = await _client.PostRunReset(seed: "default", targetDispatches, maxActiveCalls);
+        _logger.LogInformation(
+            $"Simulation started. Target: {status?.TargetDispatches} dispatches"
+        );
 
         await _locationsCache.GenerateCache();
 
@@ -33,36 +40,28 @@ public class DispatchService(
         {
             try
             {
-                Call call;
+                Call? call = null;
                 try
                 {
-                    call = await _client.GetCallNext() ?? throw new EmptyQueueException("No calls in queue");
+                    call =
+                        await _client.GetCallNext()
+                        ?? throw new EmptyQueueException("No calls in queue");
                     processedCalls++;
-                    _logger.LogInformation($"Processing call {processedCalls}/{targetDispatches} for {call.City} in {call.County}");
+                    _logger.LogInformation(
+                        $"Processing call {processedCalls}/{targetDispatches} for {call.City} in {call.County}"
+                    );
                 }
                 catch (EmptyQueueException)
                 {
-                    var currentStatus = await _client.GetRunStatus();
-                    if (currentStatus?.TotalDispatches >= targetDispatches)
-                    {
-                        _logger.LogInformation("All calls processed");
-                        break;
-                    }
-
-                    await Task.Delay(100, cancellationToken);
-                    continue;
-                }
-                catch (Exception ex) when (ex.Message.Contains("400") || ex.Message.Contains("queue full"))
-                {
-                    _logger.LogWarning("Queue is full, processing existing calls");
-                    await ProcessQueuedCallsAsync(cancellationToken);
-                    await Task.Delay(200, cancellationToken);
-                    continue;
+                    var finalStatus = await _client.PostRunStop();
+                    LogFinalResults(finalStatus!);
+                    _logger.LogInformation("No more calls in queue. Stopping dispatcher.");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    Environment.Exit(0);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error getting next call");
-                    await Task.Delay(500, cancellationToken);
                     continue;
                 }
 
@@ -71,14 +70,11 @@ public class DispatchService(
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in main dispatch loop");
-                await Task.Delay(1000, cancellationToken);
+                await Task.Delay(100, cancellationToken);
             }
         }
 
         await ProcessQueuedCallsAsync(cancellationToken);
-
-        var finalStatus = await _client.PostRunStop();
-        LogFinalResults(finalStatus!);
     }
 
     private async Task ProcessQueuedCallsAsync(CancellationToken cancellationToken)
@@ -114,7 +110,9 @@ public class DispatchService(
             return;
         }
 
-        _logger.LogInformation($"Processing call for {call.City}, {call.County} with {call.Requests.Count} requests");
+        _logger.LogInformation(
+            $"Processing call for {call.City}, {call.County} with {call.Requests.Count} requests"
+        );
 
         List<CacheItem> locations;
         try
@@ -129,7 +127,8 @@ public class DispatchService(
         }
 
         var tasks = call.Requests.Select(request =>
-            ProcessServiceRequestAsync(request, call, locations, cancellationToken));
+            ProcessServiceRequestAsync(request, call, locations, cancellationToken)
+        );
 
         await Task.WhenAll(tasks);
     }
@@ -138,19 +137,26 @@ public class DispatchService(
         ServiceRequest request,
         Call call,
         List<CacheItem> locations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (request == null || request.Quantity <= 0)
         {
             return;
         }
 
-        _logger.LogInformation($"Processing {request.ServiceType} request for {call.City}, {call.County} - Quantity: {request.Quantity}");
+        _logger.LogInformation(
+            $"Processing {request.ServiceType} request for {call.City}, {call.County} - Quantity: {request.Quantity}"
+        );
 
         int remainingQuantity = request.Quantity;
         int locationIndex = 0;
 
-        while (remainingQuantity > 0 && locationIndex < locations.Count && !cancellationToken.IsCancellationRequested)
+        while (
+            remainingQuantity > 0
+            && locationIndex < locations.Count
+            && !cancellationToken.IsCancellationRequested
+        )
         {
             var location = locations[locationIndex];
             string locationKey = $"{location.City}::{location.County}";
@@ -169,11 +175,18 @@ public class DispatchService(
                 try
                 {
                     availableQuantity = await _client.GetServiceAvailabilityByCity(
-                        request.ServiceType, location.County, location.City);
+                        request.ServiceType,
+                        location.County,
+                        location.City
+                    );
 
                     if (availableQuantity <= 0)
                     {
-                        _blacklistCache.BlacklistLocation(location.City, location.County, request.ServiceType);
+                        _blacklistCache.BlacklistLocation(
+                            location.City,
+                            location.County,
+                            request.ServiceType
+                        );
                         locationIndex++;
                         continue;
                     }
@@ -185,7 +198,10 @@ public class DispatchService(
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error checking availability in {location.City}, {location.County}");
+                _logger.LogError(
+                    ex,
+                    $"Error checking availability in {location.City}, {location.County}"
+                );
                 locationIndex++;
                 continue;
             }
@@ -199,11 +215,18 @@ public class DispatchService(
                 try
                 {
                     int confirmedQuantity = await _client.GetServiceAvailabilityByCity(
-                        request.ServiceType, location.County, location.City);
+                        request.ServiceType,
+                        location.County,
+                        location.City
+                    );
 
                     if (confirmedQuantity <= 0)
                     {
-                        _blacklistCache.BlacklistLocation(location.City, location.County, request.ServiceType);
+                        _blacklistCache.BlacklistLocation(
+                            location.City,
+                            location.County,
+                            request.ServiceType
+                        );
                         locationIndex++;
                         continue;
                     }
@@ -216,15 +239,22 @@ public class DispatchService(
                         call.County,
                         call.City,
                         dispatchQuantity,
-                        request.ServiceType);
+                        request.ServiceType
+                    );
 
-                    _logger.LogInformation($"Dispatched {dispatchQuantity} {request.ServiceType} from {location.City}, {location.County} to {call.City}, {call.County}");
+                    _logger.LogInformation(
+                        $"Dispatched {dispatchQuantity} {request.ServiceType} from {location.City}, {location.County} to {call.City}, {call.County}"
+                    );
 
                     remainingQuantity -= dispatchQuantity;
 
                     if (confirmedQuantity <= dispatchQuantity)
                     {
-                        _blacklistCache.BlacklistLocation(location.City, location.County, request.ServiceType);
+                        _blacklistCache.BlacklistLocation(
+                            location.City,
+                            location.County,
+                            request.ServiceType
+                        );
                     }
                 }
                 finally
@@ -242,17 +272,22 @@ public class DispatchService(
 
         if (remainingQuantity > 0)
         {
-            _logger.LogWarning($"Could not fulfill entire request for {request.ServiceType}. Remaining: {remainingQuantity}");
+            _logger.LogWarning(
+                $"Could not fulfill entire request for {request.ServiceType}. Remaining: {remainingQuantity}"
+            );
         }
     }
 
     private void LogFinalResults(GameStatus status)
     {
-        if (status == null) return;
+        if (status == null)
+            return;
 
         _logger.LogInformation("======== FINAL RESULTS ========");
         _logger.LogInformation($"Status: {status.Status}");
-        _logger.LogInformation($"Total dispatches: {status.TotalDispatches}/{status.TargetDispatches}");
+        _logger.LogInformation(
+            $"Total dispatches: {status.TotalDispatches}/{status.TargetDispatches}"
+        );
         _logger.LogInformation($"Running time: {status.RunningTime}");
         _logger.LogInformation($"Distance: {status.Distance}");
         _logger.LogInformation($"Penalty: {status.Penalty}");
