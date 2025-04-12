@@ -10,6 +10,7 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        var logger = new Logger<Program>(new LoggerFactory());
         var tokenCache = new TokenCache();
         using var host = Host.CreateDefaultBuilder(args)
             .ConfigureServices(
@@ -39,12 +40,12 @@ class Program
         Console.CancelKeyPress += (sender, e) =>
         {
             count++;
-            Console.WriteLine("Shutting down...");
+            logger.LogWarning("Shutting down...");
             cts.Cancel();
             e.Cancel = true;
             if (count > 1)
             {
-                Console.WriteLine("Forcefully shutting down...");
+                logger.LogCritical("Forcefully shutting down...");
                 Environment.Exit(0);
             }
         };
@@ -76,7 +77,7 @@ class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            logger.LogError(ex, "Error during initialization");
             return;
         }
 
@@ -90,11 +91,18 @@ class Program
         }
         catch (OperationCanceledException)
         {
-            Console.WriteLine("Operation was canceled");
+            logger.LogWarning("Operation was canceled");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error: {ex.Message}");
+            logger.LogError(ex, "An error occurred during dispatching");
+        }
+        finally
+        {
+            tokenCache.ClearTokens();
+            await apiClient.PostRunStop();
+            logger.LogInformation("Dispatcher stopped");
+            Environment.Exit(0);
         }
 
         Console.WriteLine("Press any key to exit...");
