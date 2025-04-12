@@ -23,21 +23,21 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
     private async Task<List<City>> _getLocations()
     {
-        var locations = await _clientService.Locations();
-        return locations;
+        var locations = await _clientService.GetLocations();
+        return locations ?? throw new Exception("Locations not found.");
     }
 
     private async Task<List<Availability>> _getAvailabilities()
     {
         var availabilityBatches = await Task.WhenAll(
-            _clientService.Search(ServiceType.Fire),
-            _clientService.Search(ServiceType.Police),
-            _clientService.Search(ServiceType.Medical),
-            _clientService.Search(ServiceType.Rescue),
-            _clientService.Search(ServiceType.Utility)
+            _clientService.GetServiceAvailability(ServiceType.Fire),
+            _clientService.GetServiceAvailability(ServiceType.Police),
+            _clientService.GetServiceAvailability(ServiceType.Medical),
+            _clientService.GetServiceAvailability(ServiceType.Rescue),
+            _clientService.GetServiceAvailability(ServiceType.Utility)
         );
 
-        return [.. availabilityBatches.SelectMany(availability => availability)];
+        return [.. availabilityBatches.SelectMany(availability => availability ?? throw new Exception("Availability not found."))];
     }
 
     public async Task<bool> GenerateCache()
