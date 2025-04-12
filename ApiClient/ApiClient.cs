@@ -1,8 +1,8 @@
+using Polly;
+using Polly.Retry;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using Polly;
-using Polly.Retry;
 using testing.Models;
 
 namespace testing.ApiClient;
@@ -160,11 +160,11 @@ public class ApiClient
         });
     }
 
-    public async Task<int> GetServiceAvailabilityByCity(ServiceType serviceType, City city)
+    public async Task<int> GetServiceAvailabilityByCity(ServiceType serviceType, string county, string city)
     {
         return await _retryPolicy.ExecuteAsync(async () =>
         {
-            var endpoint = $"{serviceType}/{RequestPath.SearchByCity}?county={WebUtility.UrlEncode(city.County)}&city={WebUtility.UrlEncode(city.Name)}";
+            var endpoint = $"{serviceType}/{RequestPath.SearchByCity}?county={WebUtility.UrlEncode(county)}&city={WebUtility.UrlEncode(city)}";
             var response = await _httpClient.GetAsync(endpoint);
             response.EnsureSuccessStatusCode();
 

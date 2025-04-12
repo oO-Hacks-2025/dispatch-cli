@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Logging;
 using testing.ApiClient;
 using testing.Models;
 
@@ -39,7 +38,7 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
 
     private async Task<List<Availability>> _getMunicipalities()
     {
-        return await _clientService.Search(ServiceType.Medical);
+        return await _clientService.GetServiceAvailability(ServiceType.Medical);
     }
 
     public async Task<bool> GenerateCache()

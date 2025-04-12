@@ -21,7 +21,7 @@ namespace testing.ApiClient
             Call emergencyCall;
             try
             {
-                emergencyCall = await _client.CallNext();
+                emergencyCall = await _client.GetCallNext();
 
             }
             catch (Exception ex)
@@ -55,11 +55,11 @@ namespace testing.ApiClient
                 {
                     var location = locations[sourceCityIndex];
 
-                    var availableQty = await _client.SearchByCity((ServiceType)request.ServiceType, location.City, location.County);
+                    var availableQty = await _client.GetServiceAvailabilityByCity((ServiceType)request.ServiceType, location.County, location.City);
 
                     if (availableQty >= remainingQty)
                     {
-                        await _client.Dispatch(location.County,
+                        await _client.PostServiceDispatch(location.County,
                                                location.City,
                                                emergencyCall.County,
                                                emergencyCall.City,
@@ -73,7 +73,7 @@ namespace testing.ApiClient
 
                     if (availableQty > 0 && availableQty < remainingQty)
                     {
-                        await _client.Dispatch(location.County,
+                        await _client.PostServiceDispatch(location.County,
                                                location.City,
                                                emergencyCall.County,
                                                emergencyCall.City,
