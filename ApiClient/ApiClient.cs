@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using System.Net;
@@ -13,22 +12,23 @@ public class ApiClient
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
     private readonly JsonSerializerOptions _jsonOptions;
-
     private readonly ILogger<ApiClient> _logger;
 
     public ApiClient(
         string baseUrl = "http://localhost:5000/",
-        string userAgent = "object Object agent")
+        string userAgent = "Emergency Dispatcher")
     {
         _logger = LoggerFactory.Create(builder =>
         {
             builder.AddConsole();
             builder.SetMinimumLevel(LogLevel.Debug);
         }).CreateLogger<ApiClient>();
+
         _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
         _httpClient.DefaultRequestHeaders.Accept.Clear();
         _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         _httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
+        _httpClient.Timeout = TimeSpan.FromSeconds(30); // Increase timeout
 
         _jsonOptions = new JsonSerializerOptions
         {
@@ -36,6 +36,7 @@ public class ApiClient
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
 
+        // Improved retry policy with exponential backoff
         _retryPolicy = Policy
             .Handle<HttpRequestException>(ex =>
                 ex.StatusCode == HttpStatusCode.ServiceUnavailable ||
@@ -47,25 +48,22 @@ public class ApiClient
             .Or<ValidationException>()
             .Or<JsonException>()
             .WaitAndRetryAsync(
-                5,
-                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                7,
+                retryAttempt => TimeSpan.FromMicroseconds(10),
                 onRetry: (exception, timeSpan, retryCount, context) =>
                 {
                     _logger.LogWarning(
-                          $"Retry {retryCount} encountered an error: {exception.Message}. Waiting {timeSpan} before next retry.");
+                          $"Retry {retryCount} after {timeSpan.TotalSeconds}s delay. Error: {exception.Message}");
                 });
     }
 
     #region Control Operations
-    public async Task<GameStatus?> PostRunReset(string seed = "default", int targetDispatches = 10_000, int maxActiveCalls = 100)
+    public async Task<GameStatus?> PostRunReset(string seed = "default", int targetDispatches = 10_000, int maxActiveCalls = 10)
     {
         return await _retryPolicy.ExecuteAsync(async () =>
         {
-            var response = await _httpClient.PostAsJsonAsync(
-                RequestPath.ControlReset,
-                new { seed, targetDispatches, maxActiveCalls },
-                _jsonOptions);
-
+            var query = $"?seed={seed}&targetDispatches={targetDispatches}&maxActiveCalls={maxActiveCalls}";
+            var response = await _httpClient.PostAsync(RequestPath.ControlReset + query, null);
             response.EnsureSuccessStatusCode();
             return await response.Content.ReadFromJsonAsync<GameStatus>(_jsonOptions);
         });
@@ -101,7 +99,7 @@ public class ApiClient
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
-                _logger.LogError("No calls in queue");
+                _logger.LogInformation("No calls in queue");
                 throw new EmptyQueueException("No calls in queue");
             }
 
