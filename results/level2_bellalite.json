@@ -1,0 +1,9 @@
+{
+  "totalDispatches": 10001,
+  "runningTime": "00:00:09.4370910",
+  "distance": 23032.158340852642,
+  "penalty": 0,
+  "httpRequests": 12217,
+  "missedErrors": 0,
+  "overDispatchedErrors": 0
+}
