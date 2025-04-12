@@ -2,6 +2,8 @@
 
 ## Running the CLI Application
 
+[Repository URL](https://github.com/oO-Hacks-2025/dispatch-cli)
+
 ### Required Components
 
 * [.NET](https://dotnet.microsoft.com/en-us/download)
