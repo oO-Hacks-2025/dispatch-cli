@@ -45,7 +45,6 @@ public class ApiClient
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
 
-        // Improved retry policy with exponential backoff
         _retryPolicy = Policy
             .Handle<HttpRequestException>(ex =>
                 ex.StatusCode == HttpStatusCode.ServiceUnavailable ||
@@ -75,7 +74,6 @@ public class ApiClient
                 {
                     var token = _tokenCache.GetToken();
                     var refreshToken = _tokenCache.GetRefreshToken();
-                    _logger.LogDebug($"{_tokenCache.GetToken()}::{_tokenCache.GetRefreshToken()}");
 
                     if (!string.IsNullOrEmpty(refreshToken))
                     {

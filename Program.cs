@@ -58,6 +58,12 @@ class Program
 
         try
         {
+            await apiClient.PostRunReset(
+                seed,
+                targetDispatches,
+                maxActiveCalls
+            );
+
             var tokens = await apiClient.PostLogin(
                                             "distancify",
                                             "hackathon"
@@ -65,11 +71,6 @@ class Program
 
             tokenCache.SetToken(tokens.Token);
             tokenCache.SetRefreshToken(tokens.RefreshToken);
-            await apiClient.PostRunReset(
-                seed,
-                targetDispatches,
-                maxActiveCalls
-            );
 
 
         }
