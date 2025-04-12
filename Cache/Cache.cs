@@ -23,19 +23,6 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         return locations ?? throw new Exception("Locations not found.");
     }
 
-    private async Task<List<Availability>> _getAvailabilities()
-    {
-        var availabilityBatches = await Task.WhenAll(
-            _clientService.GetServiceAvailability(ServiceType.Fire),
-            _clientService.GetServiceAvailability(ServiceType.Police),
-            _clientService.GetServiceAvailability(ServiceType.Medical),
-            _clientService.GetServiceAvailability(ServiceType.Rescue),
-            _clientService.GetServiceAvailability(ServiceType.Utility)
-        );
-
-        return [.. availabilityBatches.SelectMany(availability => availability ?? throw new Exception("Availability not found."))];
-    }
-
     private async Task<List<Availability>> _getMunicipalities()
     {
         return await _clientService.GetServiceAvailability(ServiceType.Medical);
@@ -45,7 +32,8 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
     {
         _logger.LogDebug("Generating distances cache...");
 
-        _logger.LogDebug("Fetching required data for distances cache generaiton...");
+        _logger.LogDebug("Fetching required data for distances cache generation...");
+
         var locations = await _getLocations();
 
         _logger.LogDebug("Building distances cache...");
