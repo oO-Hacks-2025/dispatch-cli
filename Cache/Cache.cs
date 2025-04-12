@@ -17,9 +17,6 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         ServiceType.Rescue.ToString(),
         ServiceType.Utility.ToString()
     ];
-    private ApiClient apiClient;
-    private ILogger<LocationsCache> cacheLogger;
-
     private async Task<List<City>> _getLocations()
     {
         var locations = await _clientService.GetLocations();
@@ -99,12 +96,6 @@ public class LocationsCache(ApiClient clientService, ILogger<LocationsCache> log
         }
 
         throw new KeyNotFoundException($"Key '{key}' not found in cache.");
-    }
-
-    public async Task<List<City>> GetTestVals()
-    {
-        var locations = await _getLocations();
-        return locations;
     }
 }
 
