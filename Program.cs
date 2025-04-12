@@ -4,19 +4,11 @@ using EmergencyDispatcher.Services;
 
 namespace EmergencyDispatcher;
 
-public record AppConfig(
-    string Seed,
-    int TargetDispatches,
-    int MaxActiveCalls,
-    LogLevel LogLevel,
-    string Endpoint
-);
-
 public class Program
 {
     public static async Task Main(string[] args)
     {
-        var configuration = ParseConfiguration(args);
+        var configuration = LoadConfiguration(args);
         using var host = BuildHost(args, configuration);
 
         var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -46,120 +38,57 @@ public class Program
         }
     }
 
-    private static AppConfig ParseConfiguration(string[] args)
+    private static (
+        string Seed,
+        int TargetDispatches,
+        int MaxActiveCalls,
+        LogLevel LogLevel,
+        string Endpoint
+    ) LoadConfiguration(string[] args)
     {
-        // Display help if requested
-        if (args.Contains("--help") || args.Contains("-h") || args.Contains("-?"))
-        {
-            DisplayHelp();
-            Environment.Exit(0);
-        }
-
-        // Build configuration with command line arguments
-        var configuration = new ConfigurationBuilder()
-            .AddEnvironmentVariables()
-            .AddCommandLine(
-                args,
-                new Dictionary<string, string>
-                {
-                    { "-s", "Seed" },
-                    { "--seed", "Seed" },
-                    { "-t", "TargetDispatches" },
-                    { "--target-dispatches", "TargetDispatches" },
-                    { "-m", "MaxActiveCalls" },
-                    { "--max-active-calls", "MaxActiveCalls" },
-                    { "-l", "LogLevel" },
-                    { "--log-level", "LogLevel" },
-                    { "-e", "Endpoint" },
-                    { "--endpoint", "Endpoint" },
-                }
-            )
-            .Build();
-
-        // Set defaults and override with environment vars and command line args
-        var seed = configuration["Seed"] ?? "default";
-
-        var targetDispatchesStr = configuration["TargetDispatches"];
-        var targetDispatches = 50;
-        if (
-            !string.IsNullOrEmpty(targetDispatchesStr)
-            && int.TryParse(targetDispatchesStr, out int parsedTargetDispatches)
-        )
-        {
-            targetDispatches = parsedTargetDispatches;
-        }
-
-        var maxActiveCallsStr = configuration["MaxActiveCalls"];
-        var maxActiveCalls = 10;
-        if (
-            !string.IsNullOrEmpty(maxActiveCallsStr)
-            && int.TryParse(maxActiveCallsStr, out int parsedMaxActiveCalls)
-        )
-        {
-            maxActiveCalls = parsedMaxActiveCalls;
-        }
-
-        var logLevelStr = configuration["LogLevel"];
-        var logLevel = LogLevel.Information;
-        if (!string.IsNullOrEmpty(logLevelStr))
-        {
-            logLevel = ParseLogLevel(logLevelStr);
-        }
-
-        var endpoint = configuration["Endpoint"] ?? configuration["DISPATCHING_DATA_ENDPOINT"];
-        if (string.IsNullOrEmpty(endpoint))
-        {
-            Console.WriteLine(
-                "Error: Dispatching data endpoint is required. Provide it via environment variable DISPATCHING_DATA_ENDPOINT or --endpoint flag."
-            );
-            Environment.Exit(1);
-        }
-
-        return new AppConfig(seed, targetDispatches, maxActiveCalls, logLevel, endpoint);
-    }
-
-    private static void DisplayHelp()
-    {
-        Console.WriteLine("Emergency Dispatcher Service");
-        Console.WriteLine("\nUsage:");
-        Console.WriteLine("  dotnet run [options]");
-        Console.WriteLine("\nOptions:");
-        Console.WriteLine(
-            "  -s, --seed <VALUE>                Seed for the simulation (default: \"default\")"
+        var seed = Environment.GetEnvironmentVariable("SEED") ?? "default";
+        var targetDispatches = int.Parse(
+            Environment.GetEnvironmentVariable("TARGET_DISPATCHES") ?? "50"
         );
-        Console.WriteLine(
-            "  -t, --target-dispatches <NUMBER>  Target number of dispatches (default: 50)"
+        var maxActiveCalls = int.Parse(
+            Environment.GetEnvironmentVariable("MAX_ACTIVE_CALLS") ?? "10"
         );
-        Console.WriteLine(
-            "  -m, --max-active-calls <NUMBER>   Maximum number of active calls (default: 10)"
-        );
-        Console.WriteLine(
-            "  -l, --log-level <LEVEL>           Log level: Debug, Information, Warning, Error, Critical (default: Information)"
-        );
-        Console.WriteLine(
-            "  -e, --endpoint <URL>              Dispatching data endpoint URL (required if DISPATCHING_DATA_ENDPOINT env var not set)"
-        );
-        Console.WriteLine("  -h, --help                        Display help");
-        Console.WriteLine("\nEnvironment Variables:");
-        Console.WriteLine("  SEED                              Same as --seed");
-        Console.WriteLine("  TARGET_DISPATCHES                 Same as --target-dispatches");
-        Console.WriteLine("  MAX_ACTIVE_CALLS                  Same as --max-active-calls");
-        Console.WriteLine("  LOG_LEVEL                         Same as --log-level");
-        Console.WriteLine("  DISPATCHING_DATA_ENDPOINT         Same as --endpoint");
-    }
 
-    private static LogLevel ParseLogLevel(string logLevelStr) =>
-        logLevelStr.ToLowerInvariant() switch
+        var logLevelEnv = Environment.GetEnvironmentVariable("LOG_LEVEL");
+        var logLevel = logLevelEnv switch
         {
-            "debug" => LogLevel.Debug,
-            "information" or "info" => LogLevel.Information,
-            "warning" or "warn" => LogLevel.Warning,
-            "error" => LogLevel.Error,
-            "critical" or "crit" => LogLevel.Critical,
+            "Debug" => LogLevel.Debug,
+            "Information" => LogLevel.Information,
+            "Warning" => LogLevel.Warning,
+            "Error" => LogLevel.Error,
+            "Critical" => LogLevel.Critical,
             _ => LogLevel.Information,
         };
 
-    private static IHost BuildHost(string[] args, AppConfig config)
+        var dispatchingDataEndpoint =
+            Environment.GetEnvironmentVariable("DISPATCHING_DATA_ENDPOINT")
+            ?? "http://localhost:5000/";
+
+        Console.WriteLine("Configuration:");
+        Console.WriteLine($"Seed: {seed}");
+        Console.WriteLine($"Target Dispatches: {targetDispatches}");
+        Console.WriteLine($"Max Active Calls: {maxActiveCalls}");
+        Console.WriteLine($"Log Level: {logLevel}");
+        Console.WriteLine($"Dispatching Data Endpoint: {dispatchingDataEndpoint}");
+
+        return (seed, targetDispatches, maxActiveCalls, logLevel, dispatchingDataEndpoint!);
+    }
+
+    private static IHost BuildHost(
+        string[] args,
+        (
+            string Seed,
+            int TargetDispatches,
+            int MaxActiveCalls,
+            LogLevel LogLevel,
+            string Endpoint
+        ) config
+    )
     {
         return Host.CreateDefaultBuilder(args)
             .ConfigureServices(
@@ -206,7 +135,13 @@ public class Program
     private static async Task InitializeSystem(
         ApiClient apiClient,
         TokenCache tokenCache,
-        AppConfig config,
+        (
+            string Seed,
+            int TargetDispatches,
+            int MaxActiveCalls,
+            LogLevel LogLevel,
+            string Endpoint
+        ) config,
         ILogger<Program> logger
     )
     {
