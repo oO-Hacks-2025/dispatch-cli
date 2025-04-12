@@ -5,9 +5,9 @@
       "launchBrowser": true,
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "MAX_ACTIVE_CALLS": "3",
-        "TARGET_DISPATCHES": "10",
-        "SEED": "default",
+        "MAX_ACTIVE_CALLS": "10000",
+        "TARGET_DISPATCHES": "10000",
+        "SEED": "bellalite",
         "LOG_LEVEL": "Debug",
         "DISPATCHING_DATA_ENDPOINT": "http://localhost:5000"
       },

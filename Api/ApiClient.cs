@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
-using EmergencyDispatcher.Api.Models;
 using EmergencyDispatcher.Cache;
 using EmergencyDispatcher.Domain.Models;
 using Polly;
@@ -13,19 +12,15 @@ public class ApiClient
 {
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
-    private readonly AsyncRetryPolicy _authRetryPolicy;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly ILogger<ApiClient> _logger;
-    private readonly TokenCache _tokenCache;
 
     public ApiClient(
-        TokenCache tokenCache,
         ILogger<ApiClient> logger,
         string baseUrl,
         string userAgent
     )
     {
-        _tokenCache = tokenCache;
         _logger = logger;
 
         _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl) };
@@ -48,7 +43,6 @@ public class ApiClient
         };
 
         _retryPolicy = CreateRetryPolicy();
-        _authRetryPolicy = CreateAuthRetryPolicy();
     }
 
     #region Policy Configuration
@@ -77,53 +71,6 @@ public class ApiClient
             );
     }
 
-    private AsyncRetryPolicy CreateAuthRetryPolicy()
-    {
-        return Policy
-            .Handle<HttpRequestException>(ex => ex.StatusCode == HttpStatusCode.Unauthorized)
-            .RetryAsync(
-                5,
-                async (exception, retryCount) =>
-                {
-                    _logger.LogWarning(
-                        $"Authentication failed: {exception.Message} Attempting token refresh."
-                    );
-
-                    try
-                    {
-                        var refreshToken = _tokenCache.GetRefreshToken();
-
-                        if (!string.IsNullOrEmpty(refreshToken))
-                        {
-                            var newTokens = await PostRefreshToken(refreshToken);
-                            _tokenCache.SetToken(newTokens.Token);
-                            _tokenCache.SetRefreshToken(newTokens.RefreshToken);
-
-                            _logger.LogInformation("Token refreshed successfully.");
-                        }
-                        else
-                        {
-                            _logger.LogWarning("No refresh token available.");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError($"Token refresh failed: {ex.Message}");
-                    }
-                }
-            );
-    }
-    #endregion
-
-    private async Task<T> ExecuteWithAuth<T>(Func<Task<T>> action)
-    {
-        return await _authRetryPolicy.ExecuteAsync(async () =>
-        {
-            SetBearerJwtHeader(_tokenCache.GetToken());
-            return await _retryPolicy.ExecuteAsync(action);
-        });
-    }
-
     #region Control Operations
     public async Task<GameStatus?> PostRunReset(
         string seed,
@@ -131,7 +78,7 @@ public class ApiClient
         int maxActiveCalls
     )
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var query =
                 $"?seed={WebUtility.UrlEncode(seed)}&targetDispatches={targetDispatches}&maxActiveCalls={maxActiveCalls}";
@@ -143,7 +90,7 @@ public class ApiClient
 
     public async Task<GameStatus?> PostRunStop()
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var response = await _httpClient.PostAsync(RequestPaths.ControlStop, null);
             response.EnsureSuccessStatusCode();
@@ -153,7 +100,7 @@ public class ApiClient
 
     public async Task<GameStatus?> GetRunStatus()
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var response = await _httpClient.GetAsync(RequestPaths.ControlStatus);
             response.EnsureSuccessStatusCode();
@@ -165,7 +112,7 @@ public class ApiClient
     #region Call Operations
     public async Task<Call?> GetCallNext()
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var response = await _httpClient.GetAsync(RequestPaths.CallNext);
 
@@ -182,7 +129,7 @@ public class ApiClient
 
     public async Task<List<Call>?> GetCallQueue()
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var response = await _httpClient.GetAsync(RequestPaths.CallQueue);
             response.EnsureSuccessStatusCode();
@@ -194,7 +141,7 @@ public class ApiClient
     #region Location Operations
     public async Task<List<City>?> GetLocations()
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var response = await _httpClient.GetAsync(RequestPaths.Locations);
             response.EnsureSuccessStatusCode();
@@ -206,7 +153,7 @@ public class ApiClient
     #region Service Operations
     public async Task<List<Availability>?> GetServiceAvailability(ServiceType serviceType)
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             var endpoint = $"{serviceType}/{RequestPaths.Search}";
             var response = await _httpClient.GetAsync(endpoint);
@@ -262,7 +209,7 @@ public class ApiClient
         string city
     )
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             if (string.IsNullOrWhiteSpace(county) || string.IsNullOrWhiteSpace(city))
             {
@@ -303,7 +250,7 @@ public class ApiClient
         ServiceType serviceType
     )
     {
-        return await ExecuteWithAuth(async () =>
+        return await _retryPolicy.ExecuteAsync(async () =>
         {
             if (
                 string.IsNullOrWhiteSpace(sourceCounty)
@@ -335,65 +282,5 @@ public class ApiClient
         });
     }
     #endregion
-
-    #region Authentication Operations
-    public async Task<LoginResponse> PostLogin(string userName, string password)
-    {
-        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
-        {
-            throw new ArgumentException("Username and password cannot be empty");
-        }
-
-        return await _retryPolicy.ExecuteAsync(async () =>
-        {
-            var loginRequest = new LoginRequest(userName, password);
-            var response = await _httpClient.PostAsJsonAsync(
-                RequestPaths.Login,
-                loginRequest,
-                _jsonOptions
-            );
-            response.EnsureSuccessStatusCode();
-
-            var loginResponse =
-                await response.Content.ReadFromJsonAsync<LoginResponse>(_jsonOptions)
-                ?? throw new ValidationException("Server returned null login response");
-
-            return loginResponse;
-        });
-    }
-
-    public async Task<LoginResponse> PostRefreshToken(string refreshToken)
-    {
-        if (string.IsNullOrWhiteSpace(refreshToken))
-        {
-            throw new ArgumentException("Refresh token cannot be empty");
-        }
-
-        return await _retryPolicy.ExecuteAsync(async () =>
-        {
-            using var requestMessage = new HttpRequestMessage(
-                HttpMethod.Post,
-                RequestPaths.RefreshToken
-            );
-            requestMessage.Headers.TryAddWithoutValidation("refresh_token", refreshToken);
-
-            var response = await _httpClient.SendAsync(requestMessage);
-            response.EnsureSuccessStatusCode();
-
-            return await response.Content.ReadFromJsonAsync<LoginResponse>(_jsonOptions)
-                ?? throw new ValidationException("Server returned null login response");
-        });
-    }
-
-    private void SetBearerJwtHeader(string token)
-    {
-        if (!string.IsNullOrEmpty(token))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-                "Bearer",
-                token
-            );
-        }
-    }
     #endregion
 }

@@ -12,7 +12,6 @@ public class Program
         using var host = BuildHost(args, configuration);
 
         var logger = host.Services.GetRequiredService<ILogger<Program>>();
-        var tokenCache = host.Services.GetRequiredService<TokenCache>();
         var apiClient = host.Services.GetRequiredService<ApiClient>();
         var dispatcher = host.Services.GetRequiredService<DispatchService>();
 
@@ -21,7 +20,7 @@ public class Program
 
         try
         {
-            await InitializeSystem(apiClient, tokenCache, configuration, logger);
+            await InitializeSystem(apiClient, configuration, logger);
             await RunDispatcher(dispatcher, logger, cts.Token);
         }
         catch (OperationCanceledException)
@@ -34,7 +33,7 @@ public class Program
         }
         finally
         {
-            await ShutdownSystem(apiClient, tokenCache, logger);
+            await ShutdownSystem(apiClient, logger);
         }
     }
 
@@ -94,10 +93,8 @@ public class Program
             .ConfigureServices(
                 (context, services) =>
                 {
-                    services.AddSingleton<TokenCache>();
                     services.AddSingleton<BlacklistCache>();
                     services.AddSingleton(provider => new ApiClient(
-                        provider.GetRequiredService<TokenCache>(),
                         provider.GetRequiredService<ILogger<ApiClient>>(),
                         config.Endpoint,
                         "Emergency Dispatcher UA"
@@ -134,7 +131,6 @@ public class Program
 
     private static async Task InitializeSystem(
         ApiClient apiClient,
-        TokenCache tokenCache,
         (
             string Seed,
             int TargetDispatches,
@@ -152,10 +148,6 @@ public class Program
                 config.TargetDispatches,
                 config.MaxActiveCalls
             );
-
-            var tokens = await apiClient.PostLogin("distancify", "hackathon");
-            tokenCache.SetToken(tokens.Token);
-            tokenCache.SetRefreshToken(tokens.RefreshToken);
         }
         catch (Exception ex)
         {
@@ -183,13 +175,11 @@ public class Program
 
     private static async Task ShutdownSystem(
         ApiClient apiClient,
-        TokenCache tokenCache,
         ILogger<Program> logger
     )
     {
         try
         {
-            tokenCache.ClearTokens();
             await apiClient.PostRunStop();
             logger.LogInformation("Dispatcher stopped");
         }

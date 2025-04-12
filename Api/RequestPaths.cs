@@ -13,7 +13,4 @@ public static class RequestPaths
     public const string SearchByCity = "searchbycity";
     public const string Dispatch = "dispatch";
     public const string Locations = "locations";
-
-    public const string Login = "auth/login";
-    public const string RefreshToken = "auth/refreshtoken";
 }
