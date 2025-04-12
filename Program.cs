@@ -10,6 +10,21 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        var seed = Environment.GetEnvironmentVariable("SEED") ?? "default";
+        var targetDispatches = int.Parse(Environment.GetEnvironmentVariable("TARGET_DISPATCHES"));
+        var maxActiveCalls = int.Parse(Environment.GetEnvironmentVariable("MAX_ACTIVE_CALLS"));
+
+        var logLevelEnv = Environment.GetEnvironmentVariable("LOG_LEVEL");
+        var logLevel = logLevelEnv switch
+        {
+            "Debug" => LogLevel.Debug,
+            "Information" => LogLevel.Information,
+            "Warning" => LogLevel.Warning,
+            "Error" => LogLevel.Error,
+            "Critical" => LogLevel.Critical,
+            _ => LogLevel.Information
+        };
+
         var logger = new Logger<Program>(new LoggerFactory());
         var tokenCache = new TokenCache();
         using var host = Host.CreateDefaultBuilder(args)
@@ -30,9 +45,10 @@ class Program
             {
                 logging.ClearProviders();
                 logging.AddConsole();
-                logging.SetMinimumLevel(LogLevel.Information);
+                logging.SetMinimumLevel(logLevel);
             })
             .Build();
+
 
         var cts = new CancellationTokenSource();
 
@@ -49,10 +65,6 @@ class Program
                 Environment.Exit(0);
             }
         };
-
-        var seed = "default";
-        var targetDispatches = 50;
-        var maxActiveCalls = 10;
 
         var dispatcher = host.Services.GetRequiredService<DispatchService>();
         var apiClient = host.Services.GetRequiredService<ApiClient>();

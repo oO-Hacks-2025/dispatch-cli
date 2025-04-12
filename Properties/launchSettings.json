@@ -4,7 +4,11 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "MAX_ACTIVE_CALLS": "10",
+        "TARGET_DISPATCHES": "50",
+        "SEED": "default",
+        "LOG_LEVEL": "Debug",
       },
       "applicationUrl": "https://localhost:49187;http://localhost:49188"
     }
