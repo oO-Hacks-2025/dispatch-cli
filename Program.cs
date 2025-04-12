@@ -1,4 +1,5 @@
 using Cache;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,11 +10,13 @@ class Program
 {
     static async Task Main(string[] args)
     {
+        var tokenCache = new TokenCache();
         using var host = Host.CreateDefaultBuilder(args)
             .ConfigureServices(
                 (context, services) =>
                 {
                     services.AddSingleton<ApiClient>(provider => new ApiClient(
+                        tokenCache,
                         "http://localhost:5000/",
                         "object Object UA"
                     ));
@@ -46,7 +49,35 @@ class Program
             }
         };
 
+        var seed = "default";
+        var targetDispatches = 50;
+        var maxActiveCalls = 10;
+
         var dispatcher = host.Services.GetRequiredService<DispatchService>();
+        var apiClient = host.Services.GetRequiredService<ApiClient>();
+
+        try
+        {
+            var tokens = await apiClient.PostLogin(
+                                            "distancify",
+                                            "hackathon"
+                                        );
+
+            tokenCache.SetToken(tokens.Token);
+            tokenCache.SetRefreshToken(tokens.RefreshToken);
+            await apiClient.PostRunReset(
+                seed,
+                targetDispatches,
+                maxActiveCalls
+            );
+
+
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
+            return;
+        }
 
         try
         {
